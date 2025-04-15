@@ -10,18 +10,22 @@ from typing import Optional
 from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
 from supabase import Client, create_client # Importa o cliente Supabase
+from dotenv import load_dotenv
 
 # Importa os cenários e a função de emoji do módulo local
 from scenarios import SCENARIOS, get_emoji
+
+load_dotenv()
 
 # Inicializa a aplicação Flask
 app = Flask(__name__)
 
 # Configura uma chave secreta para gerenciar sessões de forma segura.
 # É crucial trocar esta chave por um valor seguro em produção!
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "uma-chave-secreta-padrao-insegura")
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
 
 # --- Configuração do Supabase ---
+
 SUPABASE_URL: str | None = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY: str | None = os.environ.get("SUPABASE_KEY")
 supabase: Client | None = None # Inicializa como None
