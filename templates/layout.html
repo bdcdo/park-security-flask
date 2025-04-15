@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Segurança do Parque{% endblock %}</title>
+    <!-- Usando Tailwind Play CDN para evitar problemas de compilação local -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Configuração opcional do Tailwind via CDN (pode ser expandida se necessário)
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              // Podemos definir cores personalizadas aqui se precisarmos
+              // Exemplo: primary: '#3490dc',
+            }
+          }
+        },
+        darkMode: 'media' // ou 'class' se preferir controle manual
+      }
+    </script>
+    <style type="text/tailwindcss">
+        /* Podemos adicionar diretivas @apply ou CSS customizado aqui se necessário */
+        body {
+            font-family: sans-serif; /* Fallback */
+            /* Exemplo: Aplicar um anti-aliasing suave às fontes */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* Adiciona um tema verde básico para elementos não cobertos pelo Tailwind inicialmente */
+        /* Estas regras abaixo podem ser removidas ou ajustadas, pois o Tailwind CDN deve cobrir */
+        /* Adiciona um tema verde básico para elementos não cobertos pelo Tailwind inicialmente */
+        /* .bg-green-50 { background-color: #f0fdf4; } */
+        /* .text-green-600 { color: #16a34a; } */
+        /* .border-green-200 { border-color: #bbf7d0; } */
+        /* .dark .dark\:bg-green-950\/30 { background-color: rgba(6, 26, 16, 0.3); } */
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="container max-w-3xl mx-auto py-8 px-4">
+        <!-- Cabeçalho Padrão -->
+        <div class="flex items-center justify-center gap-2 mb-6">
+            {# Ícone pode ser adicionado aqui via SVG ou font icon se desejado #}
+            {# <Shield className="h-8 w-8 text-green-600" /> #}
+            <span class="text-3xl font-bold text-center text-green-600 dark:text-green-400">🛡️ Segurança do Parque</span>
+        </div>
+        <div class="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg mb-8 border border-green-200 dark:border-green-800">
+            <p class="text-center font-medium text-green-800 dark:text-green-200">
+                Seu dever: Fazer cumprir a regra
+                <br />
+                <span class="text-xl font-bold">"Proibido Veículos no Parque"</span>
+            </p>
+        </div>
+
+        <!-- Bloco de conteúdo principal que será substituído pelos templates filhos -->
+        <main>
+            {% block content %}
+            <!-- Conteúdo do cenário ou resumo irá aqui -->
+            {% endblock %}
+        </main>
+
+        <!-- Rodapé (opcional) -->
+        <footer class="mt-12 text-center text-xs text-gray-500">
+            Aplicação de Simulação - Recriada em Python/Flask
+        </footer>
+    </div>
+
+    {# Carrega o manipulador de cenário JavaScript externamente #}
+    {# O 'defer' garante que o script só execute após o HTML ser parseado #}
+    <script src="{{ url_for('static', filename='js/scenario-handler.js') }}" defer></script>
+</body>
+</html>

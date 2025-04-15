@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block title %}Turno Concluído - {{ super() }}{% endblock %}
+
+{% block content %}
+    {# Card do Resumo #}
+    <div class="border border-green-200 dark:border-green-800 rounded-lg shadow-sm bg-white dark:bg-gray-800">
+        {# Cabeçalho do Card #}
+        <div class="bg-green-50 dark:bg-green-950/30 rounded-t-lg p-4 border-b border-green-200 dark:border-green-800">
+            <h2 class="text-xl font-semibold text-green-800 dark:text-green-200">Turno Concluído</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Resumo das suas decisões como segurança do parque</p>
+        </div>
+        {# Conteúdo do Card #}
+        <div class="p-6">
+            <h3 class="font-medium mb-4 text-gray-800 dark:text-gray-200">Suas decisões de fiscalização:</h3>
+            <div class="space-y-3">
+                {# Itera sobre todos os cenários para mostrar as decisões #}
+                {% for scenario in scenarios %}
+                    <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-2">
+                        {# Título do cenário com emoji #}
+                        <span class="text-gray-700 dark:text-gray-300">
+                            {{ get_emoji(scenario.image) }} {{ scenario.title }}
+                        </span>
+                        {# Status da decisão #}
+                        {% set decision = decisions.get(scenario.id|string) %}
+                        <span class="font-medium flex items-center
+                            {% if decision is none %}
+                                text-gray-500 dark:text-gray-400
+                            {% elif decision %}
+                                text-green-600 dark:text-green-400
+                            {% else %}
+                                text-red-600 dark:text-red-400
+                            {% endif %}">
+
+                            {% if decision is none %}
+                                <span class="mr-1">❓</span> Sem decisão
+                            {% elif decision %}
+                                <span class="mr-1">✔️</span> Permitido
+                            {% else %}
+                                <span class="mr-1">🚫</span> Negado
+                            {% endif %}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {# Nota do Supervisor #}
+            <div class="mt-8 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                <h3 class="font-medium mb-2 text-amber-800 dark:text-amber-200">Nota do Supervisor:</h3>
+                <p class="text-sm text-amber-700 dark:text-amber-300">
+                    Interpretar regras requer julgamento. A regra "Proibido Veículos no Parque" tem casos claros e
+                    áreas cinzentas. Suas decisões refletem como você equilibra a letra da regra com seu propósito e as
+                    necessidades dos visitantes do parque. Esta é a essência da aplicação prática das regras.
+                </p>
+            </div>
+        </div>
+        {# Rodapé do Card com Botão de Reiniciar #}
+        <div class="p-4 border-t border-green-200 dark:border-green-800">
+            <a href="{{ url_for('reset') }}"
+               class="w-full block text-center py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                Iniciar Novo Turno
+            </a>
+        </div>
+    </div>
+{% endblock %}
