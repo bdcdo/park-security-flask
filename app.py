@@ -4,7 +4,7 @@ Aplicação Flask principal para o simulador Park Security.
 """
 
 import os
-from typing import Dict, Optional
+from typing import Optional # Revisar
 
 from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
@@ -18,6 +18,7 @@ app = Flask(__name__)
 # Configura uma chave secreta para gerenciar sessões de forma segura.
 # É crucial trocar esta chave por um valor seguro em produção!
 # Você pode gerar uma usando: python -c 'import os; print(os.urandom(24))'
+
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "uma-chave-secreta-padrao-insegura")
 
 # Define o número total de cenários
@@ -38,7 +39,7 @@ def index() -> str:
         session["decisions"] = {}
 
     current_index: int = session["current_index"]
-    decisions: Dict[int, bool] = session["decisions"]
+    decisions: dict[int, bool] = session["decisions"]
 
     # Verifica se todos os cenários foram concluídos
     if current_index >= TOTAL_SCENARIOS:
