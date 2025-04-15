@@ -4,10 +4,12 @@ Aplicação Flask principal para o simulador Park Security.
 """
 
 import os
-from typing import Optional # Revisar
+import uuid # Necessário para gerar IDs de sessão únicos
+from typing import Optional
 
 from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
+from supabase import Client, create_client # Importa o cliente Supabase
 
 # Importa os cenários e a função de emoji do módulo local
 from scenarios import SCENARIOS, get_emoji
@@ -17,9 +19,24 @@ app = Flask(__name__)
 
 # Configura uma chave secreta para gerenciar sessões de forma segura.
 # É crucial trocar esta chave por um valor seguro em produção!
-# Você pode gerar uma usando: python -c 'import os; print(os.urandom(24))'
-
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "uma-chave-secreta-padrao-insegura")
+
+# --- Configuração do Supabase ---
+SUPABASE_URL: str | None = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY: str | None = os.environ.get("SUPABASE_KEY")
+supabase: Client | None = None # Inicializa como None
+
+# Validação básica das credenciais e inicialização do cliente
+if not SUPABASE_URL or not SUPABASE_KEY:
+    app.logger.warning("Credenciais SUPABASE_URL ou SUPABASE_KEY não configuradas. A integração com Supabase estará desativada.")
+else:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        app.logger.info("Cliente Supabase inicializado com sucesso.")
+    except Exception as e:
+        app.logger.error(f"Falha ao inicializar o cliente Supabase: {e}")
+        supabase = None # Garante que seja None em caso de erro
+# --- Fim Configuração do Supabase ---
 
 # Define o número total de cenários
 TOTAL_SCENARIOS = len(SCENARIOS)
@@ -37,9 +54,13 @@ def index() -> str:
     if "decisions" not in session:
         # Armazena decisões como {scenario_id: boolean}
         session["decisions"] = {}
+    # Garante que a sessão tenha um UUID persistente
+    if 'user_session_uuid' not in session:
+        session['user_session_uuid'] = str(uuid.uuid4())
+        session.modified = True # Marca como modificada ao adicionar o UUID
 
     current_index: int = session["current_index"]
-    decisions: dict[int, bool] = session["decisions"]
+    decisions: dict[str, bool] = session["decisions"] # Chave é string agora
 
     # Verifica se todos os cenários foram concluídos
     if current_index >= TOTAL_SCENARIOS:
@@ -67,37 +88,72 @@ def index() -> str:
         )
 
 @app.route("/decision", methods=["POST"])
-def handle_decision() -> str:
+def handle_decision(): # Removido -> str para retornar Response ou Json
     """
     Processa a decisão do usuário (Sim/Não) para o cenário atual.
 
-    Atualiza o estado na sessão e redireciona para o próximo cenário ou resumo.
+    Armazena a decisão na sessão e envia para o Supabase.
+    Retorna dados do próximo cenário ou sinal de conclusão em JSON.
     """
-    if "current_index" not in session or "decisions" not in session:
-        # Se a sessão foi perdida, redireciona para o início
-        return redirect(url_for("index"))
+    if "current_index" not in session or "decisions" not in session or 'user_session_uuid' not in session:
+        # Se a sessão estiver incompleta, redireciona para o início para reinicializar
+        app.logger.warning("Sessão incompleta encontrada em /decision. Redirecionando para /.")
+        # Retornar um erro JSON pode ser melhor para chamadas fetch
+        return jsonify({"error": "Session invalid, please reload.", "redirect": url_for("index")}), 400
+
 
     current_index: int = session["current_index"]
+    session_modified_flag = False # Flag para marcar se a sessão foi modificada
 
     # Garante que ainda estamos dentro dos limites dos cenários
     if current_index < TOTAL_SCENARIOS:
-        # Obtém a decisão do formulário ('yes' ou 'no')
         decision_str: Optional[str] = request.form.get("decision")
-        # Obtém o ID do cenário atual
         scenario_id: int = SCENARIOS[current_index]["id"]
+        decision_bool: bool | None = None
 
         # Converte a decisão para booleano e armazena na sessão
         if decision_str == "yes":
-            session["decisions"][str(scenario_id)] = True # Convertido para string
+            decision_bool = True
+            session["decisions"][str(scenario_id)] = True
+            session_modified_flag = True
         elif decision_str == "no":
-            session["decisions"][str(scenario_id)] = False # Convertido para string
-        # Se decision_str for None ou inválido, não faz nada (poderia adicionar tratamento de erro)
+            decision_bool = False
+            session["decisions"][str(scenario_id)] = False
+            session_modified_flag = True
+        # Se decision_str for None ou inválido, não faz nada e não avança
 
-        # Avança para o próximo cenário
-        session["current_index"] = current_index + 1
+        # --- Integração Supabase ---
+        if supabase and decision_bool is not None: # Verifica se o cliente foi inicializado e a decisão é válida
+            try:
+                # user_session_uuid já deve existir por causa da rota index
+                user_uuid = session['user_session_uuid']
 
-        # Marca a sessão como modificada para garantir que seja salva
-        session.modified = True
+                vote_data = {
+                    'scenario_id': scenario_id,
+                    'decision': decision_bool,
+                    'session_uuid': user_uuid
+                }
+                # Assume que sua tabela se chama 'votes'
+                data, count = supabase.table('votes').insert(vote_data).execute()
+                app.logger.debug(f"Voto registrado no Supabase para session_uuid {user_uuid}, scenario_id {scenario_id}")
+
+            except Exception as e:
+                app.logger.error(f"Erro ao salvar voto no Supabase para scenario_id {scenario_id}: {e}")
+                # Considerar estratégia de fallback aqui se necessário
+                # Por enquanto, apenas logamos o erro, a decisão ainda está na sessão.
+        # --- Fim Integração Supabase ---
+
+        # Avança para o próximo cenário APENAS se uma decisão válida foi tomada
+        if decision_bool is not None:
+            session["current_index"] = current_index + 1
+            session_modified_flag = True
+
+        # Marca a sessão como modificada para garantir que seja salva, se necessário
+        if session_modified_flag:
+            session.modified = True
+
+    # Recalcula o índice atual após possível incremento
+    current_index = session["current_index"]
 
     # Verifica se todos os cenários foram concluídos
     if current_index >= TOTAL_SCENARIOS:
@@ -107,11 +163,9 @@ def handle_decision() -> str:
             'summary_url': url_for('index') # A rota index lida com o resumo
         })
     else:
-        # Obtém os dados do próximo cenário
+        # Obtém os dados do próximo cenário (agora com o índice atualizado)
         next_scenario = SCENARIOS[current_index]
-        # Calcula o progresso
         progress = (current_index / TOTAL_SCENARIOS) * 100
-        # Obtém o emoji correspondente
         emoji = get_emoji(next_scenario['image'])
 
         # Retorna os dados do próximo cenário em formato JSON
@@ -132,6 +186,7 @@ def reset() -> str:
     # Remove as chaves relevantes da sessão
     session.pop("current_index", None)
     session.pop("decisions", None)
+    session.pop("user_session_uuid", None) # Limpa também o UUID
     session.modified = True # Garante que a limpeza seja salva
     # Redireciona para o início
     return redirect(url_for("index"))
@@ -140,4 +195,4 @@ def reset() -> str:
 if __name__ == "__main__":
     # debug=True ativa o recarregamento automático e mensagens de erro detalhadas
     # host='0.0.0.0' torna o servidor acessível na rede local
-    app.run(debug=True, host='0.0.0.0', port=5001) # Usando porta 5001 para evitar conflitos comuns
+    app.run(debug=True, host='0.0.0.0', port=5001) # Usando porta 5001
