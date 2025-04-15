@@ -218,6 +218,37 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
                         data, count = supabase.table('votes').insert(vote_data).execute()
                     
                     app.logger.debug(f"Voto registrado no Supabase para session_uuid {user_uuid}, scenario_id {scenario_id}")
+
+                    # --- Contagem de Votos ---
+                    yes_votes = 0
+                    no_votes = 0
+                    try:
+                        # Contagem de votos 'sim' (usando count='exact')
+                        yes_count_res = supabase.table('votes').select('id', count='exact').eq('scenario_id', scenario_id).eq('decision', True).execute()
+                        yes_votes = yes_count_res.count if yes_count_res.count is not None else 0
+
+                        # Contagem de votos 'não'
+                        no_count_res = supabase.table('votes').select('id', count='exact').eq('scenario_id', scenario_id).eq('decision', False).execute()
+                        no_votes = no_count_res.count if no_count_res.count is not None else 0
+
+                        app.logger.debug(f"Contagem de votos para scenario {scenario_id}: Sim={yes_votes}, Não={no_votes}")
+
+                    except Exception as agg_err:
+                        app.logger.error(f"Erro ao buscar contagem de votos para scenario {scenario_id}: {agg_err}")
+                        # Mantém yes_votes e no_votes como 0 (fallback)
+                    # --- Fim Contagem de Votos ---
+
+                    # Retorna os resultados para exibição no frontend
+                    # NÃO avança o cenário aqui
+                    return jsonify({
+                        'show_results': True,
+                        'scenario_id': scenario_id,
+                        'your_decision': decision_bool,
+                        'yes_votes': yes_votes,
+                        'no_votes': no_votes,
+                        'next_scenario_url': url_for('next_scenario') # URL para o próximo passo
+                    })
+
                 except Exception as insert_err:
                     # Se falhar, tenta uma abordagem alternativa - usando a API diretamente (se disponível)
                     app.logger.warning(f"Falha no método padrão de insert: {insert_err}")
@@ -237,22 +268,76 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
                 app.logger.error(f"Erro ao salvar voto no Supabase para scenario_id {scenario_id}: {e}")
                 # Considerar estratégia de fallback aqui se necessário
                 # Por enquanto, apenas logamos o erro, a decisão ainda está na sessão.
+                # Se houve erro no Supabase, podemos decidir avançar sem mostrar resultados
+                # ou retornar um erro específico. Por ora, vamos deixar avançar.
         # --- Fim Integração Supabase ---
 
-        # Avança para o próximo cenário APENAS se uma decisão válida foi tomada
-        if decision_bool is not None:
-            session["current_index"] = current_index + 1
-            session_modified_flag = True
+        # Se a decisão foi inválida (None), retorna erro
+        if decision_bool is None:
+             app.logger.warning("Decisão inválida recebida (None).")
+             return jsonify({"error": "Invalid decision provided."}), 400
 
-        # Marca a sessão como modificada para garantir que seja salva, se necessário
-        if session_modified_flag:
-            session.modified = True
+        # Se chegou aqui, significa que a decisão foi válida, mas ou o Supabase não está ativo
+        # ou houve um erro ao salvar/contar votos. Neste caso, avançamos o cenário sem mostrar resultados.
+        # (Comportamento original)
+        session["current_index"] = current_index + 1
+        session.modified = True # Marca a sessão como modificada
 
-    # Recalcula o índice atual após possível incremento
-    current_index = session["current_index"]
+        # Recalcula o índice atual após incremento
+        current_index = session["current_index"]
+
+        # Verifica se todos os cenários foram concluídos
+        if current_index >= TOTAL_SCENARIOS:
+            # Retorna um sinal de conclusão e a URL do resumo
+            return jsonify({
+                'is_complete': True,
+                'summary_url': url_for('index') # A rota index lida com o resumo
+            })
+        else:
+            # Obtém os dados do próximo cenário (agora com o índice atualizado)
+            next_scenario = SCENARIOS[current_index]
+            progress = (current_index / TOTAL_SCENARIOS) * 100
+            emoji = get_emoji(next_scenario['image'])
+
+            # Retorna os dados do próximo cenário em formato JSON
+            return jsonify({
+                'is_complete': False,
+                'scenario': next_scenario,
+                'progress': progress,
+                'current_scenario_number': current_index + 1,
+                'total_scenarios': TOTAL_SCENARIOS,
+                'emoji': emoji
+            })
+    else:
+        # Se current_index >= TOTAL_SCENARIOS (já completou)
+        app.logger.warning("Recebida decisão quando todos os cenários já foram completados.")
+        return jsonify({
+            'is_complete': True,
+            'summary_url': url_for('index')
+        })
+
+@app.route("/next_scenario")
+def next_scenario():
+    """
+    Avança para o próximo cenário na sessão e retorna seus dados.
+    Chamado pelo frontend após o usuário visualizar os resultados da votação.
+    """
+    if "current_index" not in session:
+        app.logger.warning("Sessão sem current_index acessando /next_scenario. Redirecionando.")
+        # Retornar erro ou redirecionar? Retornar erro é melhor para fetch API.
+        return jsonify({"error": "Session invalid, please reload.", "redirect": url_for("index")}), 400
+
+    # Incrementa o índice do cenário
+    current_index = session.get("current_index", -1) # Pega o índice atual
+    current_index += 1
+    session["current_index"] = current_index
+    session.modified = True
+
+    app.logger.debug(f"Avançando para o cenário índice: {current_index}")
 
     # Verifica se todos os cenários foram concluídos
     if current_index >= TOTAL_SCENARIOS:
+        app.logger.debug("Todos os cenários concluídos. Retornando is_complete=True.")
         # Retorna um sinal de conclusão e a URL do resumo
         return jsonify({
             'is_complete': True,
@@ -260,19 +345,32 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
         })
     else:
         # Obtém os dados do próximo cenário (agora com o índice atualizado)
-        next_scenario = SCENARIOS[current_index]
-        progress = (current_index / TOTAL_SCENARIOS) * 100
-        emoji = get_emoji(next_scenario['image'])
+        try:
+            next_scenario_data = SCENARIOS[current_index]
+            progress = (current_index / TOTAL_SCENARIOS) * 100
+            emoji = get_emoji(next_scenario_data['image'])
 
-        # Retorna os dados do próximo cenário em formato JSON
-        return jsonify({
-            'is_complete': False,
-            'scenario': next_scenario,
-            'progress': progress,
-            'current_scenario_number': current_index + 1,
-            'total_scenarios': TOTAL_SCENARIOS,
-            'emoji': emoji
-        })
+            app.logger.debug(f"Retornando dados para o cenário {current_index + 1}")
+            # Retorna os dados do próximo cenário em formato JSON
+            return jsonify({
+                'is_complete': False,
+                'scenario': next_scenario_data,
+                'progress': progress,
+                'current_scenario_number': current_index + 1,
+                'total_scenarios': TOTAL_SCENARIOS,
+                'emoji': emoji
+            })
+        except IndexError:
+            app.logger.error(f"Erro: Índice {current_index} fora dos limites para SCENARIOS.")
+            # Se o índice estiver fora do alcance por algum motivo, trata como completo
+            return jsonify({
+                'is_complete': True,
+                'summary_url': url_for('index')
+            })
+        except Exception as e:
+            app.logger.error(f"Erro inesperado ao preparar próximo cenário: {e}")
+            return jsonify({"error": "Internal server error loading next scenario."}), 500
+
 
 @app.route("/reset")
 def reset() -> str:
@@ -290,10 +388,10 @@ def reset() -> str:
 @app.route("/supabase-policy")
 def supabase_policy():
     """
-    Rota que exibe a política SQL recomendada para a tabela "votes".
+    Rota que exibe a política SQL recomendada para a tabela "votes", incluindo permissão de leitura.
     """
     policy_sql = """
--- Criar tabela de votos (AJUSTADA)
+-- 1. Criar tabela de votos (se não existir)
 CREATE TABLE IF NOT EXISTS public.votes (
   id BIGSERIAL PRIMARY KEY, -- Usar BIGSERIAL é comum no Supabase
   session_uuid UUID NOT NULL, -- Coluna para o UUID da sessão Flask
@@ -326,8 +424,43 @@ WITH CHECK (
     decision IS NOT NULL
 );
 
--- Reativa o RLS com a nova política
+-- 2. Desativar RLS temporariamente para aplicar políticas
+ALTER TABLE public.votes DISABLE ROW LEVEL SECURITY;
+
+-- 3. Remover políticas antigas (se existirem) para evitar conflitos
+DROP POLICY IF EXISTS "Allow anonymous inserts" ON public.votes;
+DROP POLICY IF EXISTS "Allow specific inserts" ON public.votes;
+DROP POLICY IF EXISTS "Allow debug inserts" ON public.votes;
+DROP POLICY IF EXISTS "Allow votes inserts" ON public.votes; -- Remove a política de insert antiga se existir
+DROP POLICY IF EXISTS "Allow public read access" ON public.votes; -- Remove a política de select antiga se existir
+
+-- 4. Criar política de INSERT (Permite que usuários anônimos/autenticados insiram votos válidos)
+CREATE POLICY "Allow votes inserts"
+ON public.votes
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (
+    session_uuid IS NOT NULL AND
+    scenario_id IS NOT NULL AND
+    decision IS NOT NULL
+);
+
+-- 5. Criar política de SELECT (Permite que usuários anônimos/autenticados leiam dados)
+-- IMPORTANTE: Esta política permite ler TODAS as colunas. Se houver dados sensíveis, restrinja as colunas ou adicione condições.
+-- Para a funcionalidade de contagem de votos (agregação), esta política é necessária.
+CREATE POLICY "Allow public read access"
+ON public.votes
+FOR SELECT
+TO anon, authenticated
+USING (true); -- Permite a leitura de todas as linhas por qualquer pessoa
+
+-- 6. Reativar e Forçar RLS na tabela
 ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.votes FORCE ROW LEVEL SECURITY; -- Garante que as políticas sejam aplicadas imediatamente
+
+-- Opcional: Adicionar índices para otimizar consultas de contagem
+CREATE INDEX IF NOT EXISTS idx_votes_scenario_decision ON public.votes (scenario_id, decision);
+CREATE INDEX IF NOT EXISTS idx_votes_session_scenario ON public.votes (session_uuid, scenario_id); -- Para a restrição UNIQUE (se usada)
 """
     return render_template("sql_policy.html", policy_sql=policy_sql)
 

@@ -15,7 +15,6 @@
     </div>
 
     {# Card do Cenário #}
-    {# Tentativa de replicar a estrutura do Card do shadcn/ui com divs e classes Tailwind #}
     <div class="mb-8 border border-green-200 dark:border-green-800 rounded-lg shadow-sm bg-white dark:bg-gray-800">
         {# Cabeçalho do Card #}
         <div class="bg-green-50 dark:bg-green-950/30 rounded-t-lg text-center p-4 border-b border-green-200 dark:border-green-800">
@@ -35,8 +34,9 @@
             </div>
         </div>
         {# Rodapé do Card com Botões de Decisão #}
-        <div class="p-4 border-t border-green-200 dark:border-green-800">
-            {# Removido action e method do form, botões agora são type="button" #}
+        {# Aplica altura mínima diretamente #}
+        <div class="p-4 border-t border-green-200 dark:border-green-800 min-h-48">
+            {# Botões de decisão diretamente aqui #}
             <div class="flex justify-between gap-4">
                 {# Botão Não #}
                 <button type="button" id="button-no" value="no"
@@ -51,6 +51,29 @@
                     {# Ícone Check (pode ser SVG ou texto) #}
                     <span class="mr-2">✔️</span>
                     Sim
+                </button>
+            </div>
+            {# Div para mostrar os resultados da votação - inicialmente oculta #}
+            <div id="vote-results" class="hidden mt-6 text-center"> {# Increased top margin slightly #}
+                <p id="your-vote-text" class="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-300"></p> {# Adjusted text style #}
+                {# Barra de Progresso Combinada #}
+                <div class="w-full bg-gray-200 rounded-full h-6 dark:bg-gray-700 mb-2 overflow-hidden flex"> {# Reduced bottom margin #}
+                    <div id="yes-bar" class="bg-green-500 h-6 text-xs font-medium text-green-100 text-center p-1 leading-none flex items-center justify-center" style="width: 0%"> {# Added flex centering for text #}
+                        <span id="yes-percentage"></span>
+                    </div>
+                    <div id="no-bar" class="bg-red-500 h-6 text-xs font-medium text-red-100 text-center p-1 leading-none flex items-center justify-center" style="width: 0%"> {# Added flex centering for text #}
+                        <span id="no-percentage"></span>
+                    </div>
+                </div>
+                {# Contagem de Votos #}
+                <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 px-1 mb-4"> {# Added bottom margin #}
+                    <span id="yes-count">Sim: 0</span>
+                    <span id="no-count">Não: 0</span>
+                </div>
+                {# Botão Próximo #}
+                <button type="button" id="button-next"
+                        class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 hidden"> {# Still hidden initially #}
+                    Próximo Cenário &rarr;
                 </button>
             </div>
         </div>
