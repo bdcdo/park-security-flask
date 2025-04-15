@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política Supabase Recomendada</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2a7ae2;
+            border-bottom: 2px solid #eaeaea;
+            padding-bottom: 10px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+        }
+        .instructions {
+            background-color: #fffde7;
+            border-left: 4px solid #ffd600;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .note {
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Política SQL Recomendada para o Supabase</h1>
+    
+    <div class="instructions">
+        <p><strong>Instruções:</strong> Execute o seguinte SQL no editor SQL do Supabase para configurar uma política que permitirá inserções para qualquer usuário (anon ou authenticated) com a condição de que os campos obrigatórios estejam presentes.</p>
+    </div>
+    
+    <pre>{{ policy_sql }}</pre>
+    
+    <p class="note">Essa política aplica uma abordagem mais abrangente e específica na definição de quem pode inserir dados na tabela "votes".</p>
+    
+    <p>Depois de aplicar esta política SQL, você precisará reiniciar o aplicativo para garantir que todas as conexões sejam reestabelecidas com a nova configuração.</p>
+    
+    <a href="/" class="btn">Voltar para o Aplicativo</a>
+
+</body>
+</html>

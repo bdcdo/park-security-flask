@@ -11,6 +11,7 @@ from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
 from supabase import Client, create_client # Importa o cliente Supabase
 from dotenv import load_dotenv
+import jwt  # Adicionado para debug do token Supabase
 
 # Importa os cenários e a função de emoji do módulo local
 from scenarios import SCENARIOS, get_emoji
@@ -35,8 +36,39 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     app.logger.warning("Credenciais SUPABASE_URL ou SUPABASE_KEY não configuradas. A integração com Supabase estará desativada.")
 else:
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        app.logger.info("Cliente Supabase inicializado com sucesso.")
+        # Configura o cliente Supabase com headers adicionais para forçar o uso do role "anon"
+        # Em algumas versões mais recentes do supabase-py, podemos usar os parâmetros diretamente
+        # Verificando versão do supabase-py para fornecer a configuração apropriada
+        try:
+            from importlib.metadata import version
+            supabase_version = version("supabase")
+            app.logger.debug(f"Versão do supabase-py: {supabase_version}")
+        except:
+            supabase_version = "desconhecida"
+            app.logger.debug("Não foi possível determinar a versão do supabase-py")
+        
+        # Tenta criar o cliente com headers explícitos para forçar o role "anon"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            # Forçando o role como anon nas requisições
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        
+        # Criação do cliente tentando diferentes formas dependendo da versão
+        try:
+            # Primeiro tenta a forma com headers explícitos
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY, headers=headers)
+            app.logger.info("Cliente Supabase inicializado com headers personalizados.")
+        except TypeError:
+            # Se falhar, tenta a forma padrão
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            # E tenta definir os headers depois
+            if hasattr(supabase, '_client') and hasattr(supabase._client, 'headers'):
+                supabase._client.headers.update(headers)
+                app.logger.info("Cliente Supabase inicializado com headers atualizados após criação.")
+            else:
+                app.logger.info("Cliente Supabase inicializado com configuração padrão.")
+                
     except Exception as e:
         app.logger.error(f"Falha ao inicializar o cliente Supabase: {e}")
         supabase = None # Garante que seja None em caso de erro
@@ -137,9 +169,69 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
                     'decision': decision_bool,
                     'session_uuid': user_uuid
                 }
+                app.logger.debug(f"[DEBUG] vote_data: {vote_data}")
+
+                # Debugging do token/cliente Supabase
+                try:
+                    # Tenta decodificar a chave SUPABASE_KEY para verificar as claims
+                    decoded_key = jwt.decode(SUPABASE_KEY, options={"verify_signature": False})
+                    app.logger.debug(f"[DEBUG] Decoded SUPABASE_KEY: {decoded_key}")
+                    
+                    # Tenta acessar as propriedades do cliente Supabase para debug
+                    if hasattr(supabase, 'auth') and hasattr(supabase.auth, 'session'):
+                        session_info = supabase.auth.session()
+                        app.logger.debug(f"[DEBUG] Supabase auth session: {session_info}")
+                    
+                    # Tentativa de verificar o tipo de chave (anon vs. service_role)
+                    if SUPABASE_KEY and SUPABASE_KEY.startswith("eyJ"):
+                        app.logger.debug("[DEBUG] SUPABASE_KEY parece ser um token JWT válido")
+                    else:
+                        app.logger.debug("[DEBUG] SUPABASE_KEY não parece ser um token JWT")
+                        
+                except Exception as decode_err:
+                    app.logger.error(f"[DEBUG] Erro ao decodificar SUPABASE_KEY ou acessar session: {decode_err}")
+
+                # Tenta acessar os headers que serão enviados para entender o role
+                try:
+                    # Acessa o método interno para obter headers (se disponível)
+                    if hasattr(supabase, '_client'):
+                        headers = getattr(supabase._client, 'headers', {})
+                        app.logger.debug(f"[DEBUG] Supabase client headers: {headers}")
+                except Exception as headers_err:
+                    app.logger.error(f"[DEBUG] Erro ao acessar headers do cliente: {headers_err}")
+
                 # Assume que sua tabela se chama 'votes'
-                data, count = supabase.table('votes').insert(vote_data).execute()
-                app.logger.debug(f"Voto registrado no Supabase para session_uuid {user_uuid}, scenario_id {scenario_id}")
+                # Cria headers explícitos para garantir que o role "anon" seja aplicado na requisição
+                insert_headers = {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "X-Client-Info": "supabase-py/debug"
+                }
+                
+                # Tenta o insert com headers explícitos
+                try:
+                    # Primeiro tenta usar o método .headers() para definir headers para esta operação específica
+                    if hasattr(supabase.table('votes'), 'headers'):
+                        data, count = supabase.table('votes').headers(insert_headers).insert(vote_data).execute()
+                    else:
+                        # Se não tiver o método headers(), usa o método padrão
+                        data, count = supabase.table('votes').insert(vote_data).execute()
+                    
+                    app.logger.debug(f"Voto registrado no Supabase para session_uuid {user_uuid}, scenario_id {scenario_id}")
+                except Exception as insert_err:
+                    # Se falhar, tenta uma abordagem alternativa - usando a API diretamente (se disponível)
+                    app.logger.warning(f"Falha no método padrão de insert: {insert_err}")
+                    
+                    if hasattr(supabase, 'postgrest'):
+                        try:
+                            # Tenta usar o client postgrest diretamente
+                            data, count = supabase.postgrest.from_('votes').insert(vote_data, headers=insert_headers).execute()
+                            app.logger.debug(f"Voto registrado via postgrest para session_uuid {user_uuid}, scenario_id {scenario_id}")
+                        except Exception as postgrest_err:
+                            raise Exception(f"Falha também no insert via postgrest: {postgrest_err}")
+                    else:
+                        # Se não tiver acesso ao postgrest, reraise a exceção original
+                        raise insert_err
 
             except Exception as e:
                 app.logger.error(f"Erro ao salvar voto no Supabase para scenario_id {scenario_id}: {e}")
@@ -194,6 +286,107 @@ def reset() -> str:
     session.modified = True # Garante que a limpeza seja salva
     # Redireciona para o início
     return redirect(url_for("index"))
+
+@app.route("/supabase-policy")
+def supabase_policy():
+    """
+    Rota que exibe a política SQL recomendada para a tabela "votes".
+    """
+    policy_sql = """
+-- Criar tabela de votos (AJUSTADA)
+CREATE TABLE IF NOT EXISTS public.votes (
+  id BIGSERIAL PRIMARY KEY, -- Usar BIGSERIAL é comum no Supabase
+  session_uuid UUID NOT NULL, -- Coluna para o UUID da sessão Flask
+  scenario_id INTEGER NOT NULL,
+  decision BOOLEAN NOT NULL, -- Nome da coluna igual ao enviado pelo Python
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  -- Removido updated_at, pois não é atualizado
+  -- Removido user_id e a referência à tabela users
+  -- Adicionada restrição UNIQUE para session_uuid e scenario_id
+  -- UNIQUE(session_uuid, scenario_id) -- Descomente se quiser impedir votos duplicados da mesma sessão para o mesmo cenário
+);
+
+-- Primeiro desativa RLS para evitar conflitos durante a atualização
+ALTER TABLE public.votes DISABLE ROW LEVEL SECURITY;
+
+-- Remove políticas antigas que possam estar em conflito
+DROP POLICY IF EXISTS "Allow anonymous inserts" ON public.votes;
+DROP POLICY IF EXISTS "Allow specific inserts" ON public.votes;
+DROP POLICY IF EXISTS "Allow debug inserts" ON public.votes;
+
+-- Cria uma política mais específica que permite inserções para qualquer usuário (anon ou authenticated)
+-- com a condição de que os campos obrigatórios estejam presentes
+CREATE POLICY "Allow votes inserts"
+ON public.votes
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (
+    session_uuid IS NOT NULL AND 
+    scenario_id IS NOT NULL AND 
+    decision IS NOT NULL
+);
+
+-- Reativa o RLS com a nova política
+ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
+"""
+    return render_template("sql_policy.html", policy_sql=policy_sql)
+
+@app.route("/debug")
+def debug_info():
+    """
+    Rota de diagnóstico para mostrar informações de configuração e debug do Supabase.
+    Útil para troubleshooting da integração com Supabase.
+    """
+    debug_data = {
+        "supabase_configured": supabase is not None,
+        "supabase_url_config": bool(SUPABASE_URL),  # Apenas indica se está configurado, sem expor o valor
+        "supabase_key_config": bool(SUPABASE_KEY),  # Apenas indica se está configurado, sem expor o valor
+    }
+    
+    # Verifica o tipo de chave e tenta decodificar se for JWT
+    if SUPABASE_KEY:
+        debug_data["key_type"] = "Parece ser JWT" if SUPABASE_KEY.startswith("eyJ") else "Não parece ser JWT"
+        try:
+            # Tenta decodificar a chave SUPABASE_KEY para verificar as claims
+            decoded_key = jwt.decode(SUPABASE_KEY, options={"verify_signature": False})
+            
+            # Mostra informações importantes sem expor a chave completa
+            safe_claims = {}
+            # Lista de claims seguros para exibir
+            for claim in ["aud", "role", "iss", "exp", "iat"]:
+                if claim in decoded_key:
+                    safe_claims[claim] = decoded_key[claim]
+            
+            debug_data["key_decoded_claims"] = safe_claims
+        except Exception as e:
+            debug_data["key_decode_error"] = str(e)
+    
+    # Verifica a existência e acesso ao cliente Supabase
+    if supabase:
+        # Tentativa de acessar informações do cliente
+        try:
+            if hasattr(supabase, '_client'):
+                # Pega apenas os nomes das chaves dos headers para evitar expor informações sensíveis
+                if hasattr(supabase._client, 'headers'):
+                    headers = getattr(supabase._client, 'headers', {})
+                    debug_data["client_headers_keys"] = list(headers.keys())
+            
+            # Verifica métodos disponíveis no cliente
+            debug_data["has_auth"] = hasattr(supabase, 'auth')
+            debug_data["has_auth_session"] = hasattr(supabase, 'auth') and hasattr(supabase.auth, 'session')
+            
+            # Tenta acessar a sessão se disponível
+            if debug_data.get("has_auth_session"):
+                try:
+                    session_info = supabase.auth.session()
+                    if session_info:
+                        debug_data["auth_session_info"] = "Disponível (dados omitidos por segurança)"
+                except Exception as session_err:
+                    debug_data["auth_session_error"] = str(session_err)
+        except Exception as client_err:
+            debug_data["client_access_error"] = str(client_err)
+    
+    return jsonify(debug_data)
 
 # Bloco para executar a aplicação em modo de desenvolvimento
 if __name__ == "__main__":
