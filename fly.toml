@@ -17,6 +17,10 @@ primary_region = 'gig'
   min_machines_running = 0
   processes = ['app']
 
+# Explicitly specify the command to run
+[processes]
+  app = "python app.py"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
@@ -25,3 +29,4 @@ primary_region = 'gig'
 
 [env]
   PORT = "8080"
+  FLASK_ENV = "production"
