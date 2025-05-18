@@ -5,7 +5,7 @@ Aplicação Flask principal para o simulador Park Security.
 
 import os
 import uuid # Necessário para gerar IDs de sessão únicos
-from typing import Optional
+from typing import Optional, Any
 
 from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
@@ -23,13 +23,16 @@ app = Flask(__name__)
 
 # Configura uma chave secreta para gerenciar sessões de forma segura.
 # É crucial trocar esta chave por um valor seguro em produção!
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
+secret = os.environ.get("FLASK_SECRET_KEY") or str(uuid.uuid4())
+app.config["SECRET_KEY"] = secret
+if not os.environ.get("FLASK_SECRET_KEY"):
+    app.logger.warning("Nenhum FLASK_SECRET_KEY configurado: usando UUID aleatório para SECRET_KEY")
 
 # --- Configuração do Supabase ---
 
 SUPABASE_URL: str | None = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY: str | None = os.environ.get("SUPABASE_KEY")
-supabase: Client | None = None # Inicializa como None
+supabase: Any | None = None # Inicializa como None
 
 # Validação básica das credenciais e inicialização do cliente
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -470,7 +473,7 @@ def debug_info():
     Rota de diagnóstico para mostrar informações de configuração e debug do Supabase.
     Útil para troubleshooting da integração com Supabase.
     """
-    debug_data = {
+    debug_data: dict[str, Any] = {
         "supabase_configured": supabase is not None,
         "supabase_url_config": bool(SUPABASE_URL),  # Apenas indica se está configurado, sem expor o valor
         "supabase_key_config": bool(SUPABASE_KEY),  # Apenas indica se está configurado, sem expor o valor
