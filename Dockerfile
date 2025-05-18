@@ -1,9 +1,9 @@
-# syntax = docker/dockerfile:1
-FROM python:3.11-slim
+# Python Flask application
+FROM python:3.11-slim AS python-base
 
 LABEL fly_launch_runtime="Python"
 
-# Set production environment
+# Python environment setup
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -14,35 +14,35 @@ ENV PYTHONUNBUFFERED=1 \
 # Python/Flask app lives here
 WORKDIR /app
 
-# Install Python dependencies
+# Install Python dependencies first
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Install Node.js for Tailwind CSS processing
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y nodejs npm && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create static directory and copy CSS files first
+# Create output directory for CSS
 RUN mkdir -p /app/static/css
 
-# Copy package files for Tailwind
+# Use a separate Node.js stage to build Tailwind CSS
+FROM node:slim AS css-builder
+
+WORKDIR /build
+
+# Copy only what's needed for CSS build
 COPY package.json package-lock.json ./
-COPY static/css/input.css /app/static/css/
+COPY static/css/input.css ./static/css/input.css
+COPY tailwind.config.js ./
 
-# Install Tailwind CSS globally
+# Install Tailwind and build CSS
 RUN npm install
-RUN npm install -g tailwindcss@4.1.3
+RUN npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css
 
-# Build CSS with Tailwind CLI
-RUN npx tailwindcss@4.1.3 -i /app/static/css/input.css -o /app/static/css/output.css
+# Final stage using Python image
+FROM python-base
 
-# Copy the rest of the application code
+# Copy Python app files
 COPY . .
 
-# Clean up npm to reduce image size
-RUN rm -rf node_modules
+# Copy built CSS from Node.js stage
+COPY --from=css-builder /build/static/css/output.css /app/static/css/output.css
 
 # Make port available
 EXPOSE 8080
