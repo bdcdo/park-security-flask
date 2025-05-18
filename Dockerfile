@@ -25,8 +25,10 @@ RUN pip install -r requirements.txt
 # Install Node dependencies and build CSS
 COPY package.json package-lock.json ./
 RUN npm ci
+RUN npm install -g tailwindcss
 COPY static/css/input.css ./static/css/
-RUN npm run build:css
+RUN mkdir -p static/css 
+RUN npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css
 
 # Copy application code
 COPY . .
