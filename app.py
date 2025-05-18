@@ -90,13 +90,17 @@ def index() -> str:
     # Inicializa o estado na sessão se não existir
     if "current_index" not in session:
         session["current_index"] = 0
+        app.logger.debug("Inicializando current_index na sessão")
     if "decisions" not in session:
         # Armazena decisões como {scenario_id: boolean}
         session["decisions"] = {}
+        app.logger.debug("Inicializando dicionário decisions na sessão")
     # Garante que a sessão tenha um UUID persistente
     if 'user_session_uuid' not in session:
         session['user_session_uuid'] = str(uuid.uuid4())
-        session.modified = True # Marca como modificada ao adicionar o UUID
+        app.logger.debug("Inicializando user_session_uuid na sessão")
+        
+    session.modified = True # Marca como modificada ao inicializar valores
 
     current_index: int = session["current_index"]
     decisions: dict[str, bool] = session["decisions"] # Chave é string agora
@@ -104,6 +108,8 @@ def index() -> str:
     # Verifica se todos os cenários foram concluídos
     if current_index >= TOTAL_SCENARIOS:
         # Renderiza a página de resumo
+        # Debugging para verificar conteúdo da sessão de decisões
+        app.logger.debug(f"Decisões no resumo: {decisions}")
         return render_template(
             "summary.html",
             scenarios=SCENARIOS,
@@ -155,12 +161,19 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
             decision_bool = True
             session["decisions"][str(scenario_id)] = True
             session_modified_flag = True
+            app.logger.debug(f"Armazenando decisão SIM para cenário {scenario_id}, key={str(scenario_id)}, tipo={type(session['decisions'][str(scenario_id)])}")
         elif decision_str == "no":
             decision_bool = False
             session["decisions"][str(scenario_id)] = False
             session_modified_flag = True
+            app.logger.debug(f"Armazenando decisão NÃO para cenário {scenario_id}, key={str(scenario_id)}, tipo={type(session['decisions'][str(scenario_id)])}")
         # Se decision_str for None ou inválido, não faz nada e não avança
 
+        # Garante que a sessão seja salva antes de continuar
+        if session_modified_flag:
+            session.modified = True
+            app.logger.debug(f"Salvando decisão {decision_bool} para cenário {scenario_id}, session['decisions']: {session['decisions']}")
+            
         # --- Integração Supabase ---
         if supabase and decision_bool is not None: # Verifica se o cliente foi inicializado e a decisão é válida
             try:
@@ -285,6 +298,7 @@ def handle_decision(): # Removido -> str para retornar Response ou Json
         # (Comportamento original)
         session["current_index"] = current_index + 1
         session.modified = True # Marca a sessão como modificada
+        app.logger.debug(f"Avançando para cenário {session['current_index']}, decisões atuais: {session['decisions']}")
 
         # Recalcula o índice atual após incremento
         current_index = session["current_index"]
@@ -335,6 +349,7 @@ def next_scenario():
     current_index += 1
     session["current_index"] = current_index
     session.modified = True
+    app.logger.debug(f"next_scenario: Avançando para cenário {current_index}, decisões atuais: {session.get('decisions', {})}")
 
     app.logger.debug(f"Avançando para o cenário índice: {current_index}")
 
@@ -381,10 +396,12 @@ def reset() -> str:
     Reinicia o jogo limpando o estado da sessão.
     """
     # Remove as chaves relevantes da sessão
+    app.logger.debug(f"Resetando sessão. Estado anterior: index={session.get('current_index')}, decisions={session.get('decisions')}")
     session.pop("current_index", None)
     session.pop("decisions", None)
     session.pop("user_session_uuid", None) # Limpa também o UUID
     session.modified = True # Garante que a limpeza seja salva
+    app.logger.debug("Sessão resetada com sucesso")
     # Redireciona para o início
     return redirect(url_for("index"))
 

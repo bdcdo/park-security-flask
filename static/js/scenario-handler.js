@@ -111,6 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Esconde os botões Sim/Não diretamente
                 buttonNo.classList.add('hidden');
                 buttonYes.classList.add('hidden');
+                
+                console.log('Decisão enviada:', data.scenario_id, data.your_decision);
 
 
                 // Seleciona os novos elementos das barras e contagens DENTRO deste bloco

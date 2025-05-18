@@ -22,21 +22,23 @@
                             {{ get_emoji(scenario.image) }} {{ scenario.title }}
                         </span>
                         {# Status da decisão #}
-                        {% set decision = decisions.get(scenario.id|string) %}
+                        {% set scenario_id_str = scenario.id|string %}
+                        {% set decision = decisions.get(scenario_id_str) %}
+                        {# Debug: {{ scenario_id_str }} - {{ decision }} #}
                         <span class="font-medium flex items-center
                             {% if decision is none %}
                                 text-gray-500 dark:text-gray-400
-                            {% elif decision %}
+                            {% elif decision == True %}
                                 text-green-600 dark:text-green-400
-                            {% else %}
+                            {% elif decision == False %}
                                 text-red-600 dark:text-red-400
                             {% endif %}">
 
                             {% if decision is none %}
                                 <span class="mr-1">❓</span> Sem decisão
-                            {% elif decision %}
+                            {% elif decision == True %}
                                 <span class="mr-1">✔️</span> Permitido
-                            {% else %}
+                            {% elif decision == False %}
                                 <span class="mr-1">🚫</span> Negado
                             {% endif %}
                         </span>
