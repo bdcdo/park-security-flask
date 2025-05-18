@@ -24,16 +24,22 @@ RUN apt-get update -qq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create static directory
+# Create static directory and copy CSS files first
 RUN mkdir -p /app/static/css
 
-# Copy source code
-COPY . .
+# Copy package files for Tailwind
+COPY package.json package-lock.json ./
+COPY static/css/input.css /app/static/css/
 
-# Install Tailwind CSS
+# Install Tailwind CSS globally
 RUN npm install
-RUN npm install -g tailwindcss
-RUN npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css
+RUN npm install -g tailwindcss@4.1.3
+
+# Build CSS with Tailwind CLI
+RUN npx tailwindcss@4.1.3 -i /app/static/css/input.css -o /app/static/css/output.css
+
+# Copy the rest of the application code
+COPY . .
 
 # Clean up npm to reduce image size
 RUN rm -rf node_modules
