@@ -4,3 +4,15 @@
 .env
 Dockerfile
 fly.toml
+# Ignore package-lock.json to prevent Node.js detection
+package-lock.json
+# Ignore Node.js build files
+npm-debug.log
+
+# Ignore Python cache files
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.coverage
+htmlcov
