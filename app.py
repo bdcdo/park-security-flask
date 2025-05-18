@@ -528,4 +528,5 @@ def debug_info():
 if __name__ == "__main__":
     # debug=True ativa o recarregamento automático e mensagens de erro detalhadas
     # host='0.0.0.0' torna o servidor acessível na rede local
-    app.run(debug=True, host='0.0.0.0', port=5001) # Usando porta 5001
+    port = int(os.environ.get("PORT", 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)
