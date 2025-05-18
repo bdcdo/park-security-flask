@@ -1,39 +1,39 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
-ARG NODE_VERSION=20.18.0
-FROM node:${NODE_VERSION}-slim AS base
+# Python version
+FROM python:3.11-slim
 
-LABEL fly_launch_runtime="Node.js"
+LABEL fly_launch_runtime="Python"
 
-# Node.js app lives here
+# Python/Flask app lives here
 WORKDIR /app
 
 # Set production environment
-ENV NODE_ENV="production"
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-
-# Throw-away build stage to reduce size of final image
-FROM base AS build
-
-# Install packages needed to build node modules
+# Install Node.js for Tailwind CSS
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+    apt-get install --no-install-recommends -y nodejs npm
 
-# Install node modules
-COPY package-lock.json package.json ./
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Install Node dependencies and build CSS
+COPY package.json package-lock.json ./
 RUN npm ci
+COPY static/css/input.css ./static/css/
+RUN npm run build:css
 
 # Copy application code
 COPY . .
 
-
-# Final stage for app image
-FROM base
-
-# Copy built application
-COPY --from=build /app /app
-
 # Start the server by default, this can be overwritten at runtime
-EXPOSE 3000
-CMD [ "node", "index.js" ]
+EXPOSE 8080
+ENV PORT=8080
+
+# Run the application
+CMD ["python", "app.py"]

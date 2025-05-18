@@ -529,4 +529,6 @@ if __name__ == "__main__":
     # debug=True ativa o recarregamento automático e mensagens de erro detalhadas
     # host='0.0.0.0' torna o servidor acessível na rede local
     port = int(os.environ.get("PORT", 5001))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    # In production, debug should be set to False
+    debug_mode = os.environ.get("FLASK_ENV") != "production"
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
