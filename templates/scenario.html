@@ -56,6 +56,11 @@
             {# Div para mostrar os resultados da votação - inicialmente oculta #}
             <div id="vote-results" class="hidden mt-6 text-center"> {# Increased top margin slightly #}
                 <p id="your-vote-text" class="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-300"></p> {# Adjusted text style #}
+                {# Botão Próximo - Movido para cima dos resultados #}
+                <button type="button" id="button-next"
+                        class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 hidden mb-4"> {# Still hidden initially, added bottom margin #}
+                    Próximo Cenário &rarr;
+                </button>
                 {# Barra de Progresso Combinada #}
                 <div class="w-full bg-gray-200 rounded-full h-6 dark:bg-gray-700 mb-2 overflow-hidden flex"> {# Reduced bottom margin #}
                     <div id="yes-bar" class="bg-green-500 h-6 text-xs font-medium text-green-100 text-center p-1 leading-none flex items-center justify-center" style="width: 0%"> {# Added flex centering for text #}
@@ -66,15 +71,10 @@
                     </div>
                 </div>
                 {# Contagem de Votos #}
-                <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 px-1 mb-4"> {# Added bottom margin #}
+                <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 px-1"> {# Removed bottom margin as it's not needed anymore #}
                     <span id="yes-count">Sim: 0</span>
                     <span id="no-count">Não: 0</span>
                 </div>
-                {# Botão Próximo #}
-                <button type="button" id="button-next"
-                        class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 hidden"> {# Still hidden initially #}
-                    Próximo Cenário &rarr;
-                </button>
             </div>
         </div>
     </div>
